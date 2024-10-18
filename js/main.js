@@ -77,13 +77,14 @@ const generateCardInfo = (card) => {
 // Generate card modal HTML
 const generateCardModal = (card, cleanedOracleText) => {
   const { cardName, typeLine, imageUrl, modalImageUrl, powerToughness } = generateCardInfo(card);
+  const modalId = `cardModal${card.id}`;
 
   return `
-        <div class="modal fade" id="cardModal${card.id}" tabindex="-1" aria-labelledby="cardModalLabel${card.id}" aria-hidden="true">
+        <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content border border-info">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="cardModalLabel${card.id}">Card Details</h5>
+                        <h5 class="modal-title" id="${modalId}Label">Card Details</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body mb-2">
@@ -216,29 +217,32 @@ const renderDeck = () => {
 
   // Render commander
   if (deck.commander) {
-    const commanderCardElement = createCardElement(deck.commander, 'commander');
+    const commanderCardElement = createCardElement(deck.commander, 'commander', 1);
     commanderList.appendChild(commanderCardElement);
   }
 
   // Render mainboard
   deck.mainboard.forEach((card) => {
-    const mainboardCardElement = createCardElement(card, 'mainboard');
+    const mainboardCardElement = createCardElement(card, 'mainboard', card.quantity);
     mainboardList.appendChild(mainboardCardElement);
   });
 
   // Render sideboard
   deck.sideboard.forEach((card) => {
-    const sideboardCardElement = createCardElement(card, 'sideboard');
+    const sideboardCardElement = createCardElement(card, 'sideboard', card.quantity);
     sideboardList.appendChild(sideboardCardElement);
   });
 
   // Update card count
-  const totalCards = deck.mainboard.length + deck.sideboard.length + (deck.commander ? 1 : 0);
+  const totalCards =
+    deck.mainboard.reduce((acc, card) => acc + card.quantity, 0) +
+    deck.sideboard.reduce((acc, card) => acc + card.quantity, 0) +
+    (deck.commander ? 1 : 0); // Commander count is always 1
   cardNumber.textContent = `${totalCards} cards`;
 };
 
 // Function to create card element
-const createCardElement = (card, type) => {
+const createCardElement = (card, type, quantity) => {
   const cardName = card.card_faces
     ? card.card_faces.map((face) => face.name).join(' // ')
     : card.name;
@@ -250,7 +254,7 @@ const createCardElement = (card, type) => {
   cardElement.className = 'd-flex align-items-center';
   cardElement.innerHTML = `
         <button class="list-group-item list-group-item-action flex-grow-1" data-bs-toggle="modal" data-bs-target="#cardModal${card.id}">
-            <div class="">${cardName}</div>
+            <div class="">${cardName} (x${quantity})</div>
         </button>
 
         <button type="button" class="btn btn-outline-danger ms-2 remove-card" data-type="${type}" data-id="${card.id}">
@@ -265,65 +269,139 @@ const createCardElement = (card, type) => {
   return cardElement;
 };
 
+// Add modal for card sorting
+const createAddCardModal = (card) => {
+  if (!card) {
+    console.error('Card is undefined in createAddCardModal');
+    return; // Handle the case where card is undefined
+  }
+
+  //   Remove existing modal if it exists
+  const existingModal = document.getElementById('addCardModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  // Create modal elements
+  const modal = document.createElement('div');
+  modal.className = 'modal fade';
+  modal.id = 'addCardModal';
+  modal.tabIndex = '-1';
+  modal.setAttribute('aria-labelledby', 'addCardModalLabel');
+  modal.setAttribute('aria-hidden', 'true');
+
+  modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addCardModalLabel">Add Card to Deck</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="alertPlaceholder"></div>
+                    <div>
+                        <label for="quantityInput" class="form-label">Quantity:</label>
+                        <input type="number" id="quantityInput" class="form-control" value="1" min="1">
+                    </div>
+                    <div class="d-flex justify-content-center gap-2 mt-3">
+                        <button class="btn btn-light btn-lg" id="addCommanderBtn">Commander</button>
+                        <button class="btn btn-primary btn-lg" id="addMainboardBtn">Mainboard</button>
+                        <button class="btn btn-secondary btn-lg" id="addSideboardBtn">Sideboard</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+  // Append modal to body
+  document.body.appendChild(modal);
+
+  // Initialize Bootstrap modal
+  const addCardModal = new bootstrap.Modal(modal);
+
+  const showAlert = (message, type) => {
+    const alertPlaceholder = modal.querySelector('#alertPlaceholder');
+    alertPlaceholder.innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+  };
+
+  const quantityInput = modal.querySelector('#quantityInput');
+
+  // Event listeners for buttons
+  modal.querySelector('#addCommanderBtn').onclick = () => {
+    if (deck.commander) {
+      showAlert(
+        'You already have a commander. Please remove the existing commander before adding a new one.',
+        'warning'
+      );
+      console.log('Commander already set.');
+    } else {
+      deck.commander = card; // Add as commander
+      console.log('Commander set: ', card.name);
+      addCardModal.hide(); // Close modal
+      renderDeck();
+    }
+  };
+
+  modal.querySelector('#addMainboardBtn').onclick = () => {
+    const quantity = parseInt(quantityInput.value, 10);
+    if (!deck.mainboard.find((existingCard) => existingCard.id === card.id)) {
+      deck.mainboard.push({ ...card, quantity }); // Add to mainboard
+      console.log(`Card added to mainboard: , ${card.name} x ${quantity}`);
+      addCardModal.hide(); // Close modal
+      renderDeck();
+    } else {
+      // If the card is already in the mainboard, we should update the quantity
+      const existingCard = deck.mainboard.find((existingCard) => existingCard.id === card.id);
+      existingCard.quantity += quantity;
+      console.log(`Updated quantity for ${card.name} to ${existingCard.quantity}`);
+      addCardModal.hide(); // Close modal
+      renderDeck();
+    }
+  };
+
+  modal.querySelector('#addSideboardBtn').onclick = () => {
+    const quantity = parseInt(quantityInput.value, 10);
+    if (!deck.sideboard.find((existingCard) => existingCard.id === card.id)) {
+      deck.sideboard.push({ ...card, quantity }); // Add to sideboard
+      console.log(`Card added to sideboard: ${card.name} x ${quantity}`);
+      addCardModal.hide(); // Close modal
+      renderDeck();
+    } else {
+      // If the card is already in the sideboard, we should update the quantity
+      const existingCard = deck.sideboard.find((existingCard) => existingCard.id === card.id);
+      existingCard.quantity += quantity;
+      console.log(`Updated quantity for ${card.name} to ${existingCard.quantity}`);
+      addCardModal.hide(); // Close modal
+      renderDeck();
+    }
+  };
+
+  return addCardModal;
+};
+
 // Function to add card to deck
 const addCardToDeck = (card) => {
   console.log('addCardToDeck function called');
-  console.log(card);
+  console.log(card); // This should log the card object
 
   if (!deck) {
     console.error('Deck not initialized');
     return;
   }
 
-  const cardType = prompt(
-    'Add this card as:\n1. Commander\n2. Mainboard\n3. Sideboard\n Enter 1, 2 or 3'
-  );
-
-  // Validate input
-  if (cardType === null) {
-    console.log('User cancelled the prompt');
-    return;
+  if (!card) {
+    console.error('Card is undefined in addCardToDeck');
+    return; // Early exit if the card is not defined
   }
 
-  switch (cardType) {
-    case '1':
-      if (deck.commander) {
-        alert(
-          'You already have a commander. Please remove the current commander before adding a new one.'
-        );
-        console.log('Commander already set.');
-        return;
-      } else {
-        deck.commander = card; // Add as commander
-        console.log('Commander set: ', card.name);
-      }
-      break;
-    case '2':
-      if (!deck.mainboard.find((exsistingCard) => exsistingCard.id === card.id)) {
-        deck.mainboard.push(card); // Add to mainboard
-        console.log('Card added to mainboard: ', card.name);
-      } else {
-        alert('You already have this card in your mainboard. Please add a different card.');
-        console.log('Card already in mainboard.');
-        return;
-      }
-      break;
-    case '3':
-      if (!deck.sideboard.find((exsistingCard) => exsistingCard.id === card.id)) {
-        deck.sideboard.push(card); // Add to sideboard
-        console.log('Card added to sideboard: ', card.name);
-      } else {
-        alert('You already have this card in your sideboard. Please add a different card.');
-        console.log('Card already in sideboard.');
-        return;
-      }
-      break;
-    default:
-      alert('Invalid input. Please enter 1, 2 or 3');
-      console.log('Invalid input');
-      return;
-  }
-  renderDeck();
+  // Create and show the modal with the card object
+  const addCardModal = createAddCardModal(card);
+  addCardModal.show();
 };
 
 // Function to remove card from deck
