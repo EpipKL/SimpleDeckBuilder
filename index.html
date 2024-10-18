@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Deck Builder</title>
+    <link rel="stylesheet" href="./styles/main.css" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous" />
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"></script>
+  </head>
+  <body data-bs-theme="dark">
+    <!-- Navigation -->
+    <nav class="navbar bg-body-tertiary">
+      <div class="container-fluid">
+        <a class="navbar-brand">Simple Deck Builder</a>
+        <form class="d-flex" role="search">
+          <input
+            class="form-control me-2"
+            type="search"
+            placeholder="Search"
+            aria-label="Search"
+            id="general-search" />
+          <button class="btn btn-outline-success" type="submit" id="general-search-button">
+            Search
+          </button>
+        </form>
+      </div>
+    </nav>
+    <!-- Navigation End-->
+    <!-- Main Content -->
+    <main>
+      <!-- Deck Builder -->
+      <div class="container-fluid mt-5">
+        <div class="row">
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">Deck</div>
+              <div class="card-body">
+                <!-- Commander (if applicable) -->
+                <p>Commander</p>
+                <div class="list-group">
+                  <div class="d-flex align-items-center">
+                    <button class="list-group-item list-group-item-action flex-grow-1">
+                      <div class="">Card 1</div>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger ms-2">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+                <!-- Mainboard -->
+                <p class="mt-3">Mainboard</p>
+                <div class="list-group">
+                  <!-- Card 1 -->
+                  <div class="d-flex align-items-center">
+                    <button class="list-group-item list-group-item-action flex-grow-1">
+                      <div class="">Card 1</div>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger ms-2">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                  <!-- Card 2 -->
+                  <div class="d-flex align-items-center">
+                    <button class="list-group-item list-group-item-action flex-grow-1">
+                      <div class="">Card 2</div>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger ms-2">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                  <!-- Card 3 -->
+                  <div class="d-flex align-items-center">
+                    <button class="list-group-item list-group-item-action flex-grow-1">
+                      <div class="">Card 3</div>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger ms-2">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+                <!-- Sideboard (if applicable) -->
+                <p class="mt-3">Sideboard</p>
+                <div class="list-group">
+                  <div class="d-flex align-items-center">
+                    <button class="list-group-item list-group-item-action flex-grow-1">
+                      <div class="">Card 1</div>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger ms-2">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span id="card-number">0 cards</span>
+                  <div>
+                    <button type="button" class="btn btn-outline-primary me-2" id="export-button">
+                      Export
+                      <i class="bi bi-download"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" id="clear-button">
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Card Search -->
+          <div class="col-md-8">
+            <div class="card">
+              <!-- Search Queries -->
+              <div class="overflow-y-scroll mh-100" style="height: 50vh" id="search-results"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white text-center py-4 mt-5">
+      <div class="container">
+        <p class="mb-1 text-decoration-underline">
+          <small>
+            This site is not produced, affiliated, or endorsed by Wizards of the Coast, Inc.
+          </small>
+        </p>
+        <p class="mb-1">
+          <small>
+            This site abides by the Wizards of the Coast Fan Content Policy. Wizards of the Coast
+            LLC may grant permission to use its intellectual property, including but not limited to
+            its trademarks, trade dress, and copyrighted material, under certain conditions. For
+            more information, please refer to the Wizards of the Coast Fan Content Policy at
+            <a
+              href="https://company.wizards.com/en/legal/fancontentpolicy"
+              class="text-info"
+              target="_blank"
+              >https://company.wizards.com/en/legal/fancontentpolicy </a
+            >.
+          </small>
+        </p>
+        <p class="mb-0">
+          Developed by
+          <a href="https://github.com/EpipKL" class="text-danger" target="_blank">Kyle Lucas</a>.
+        </p>
+      </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="./js/main.js" type="module"></script>
+  </body>
+</html>
