@@ -17,19 +17,24 @@ const fetchCardData = async (query) => {
 // Generate cleaned oracle data
 const getCleanedOracleText = (card) => {
   const isMDFC = card.card_faces && card.card_faces.length > 0;
-  const oracleText = isMDFC
-    ? card.card_faces.map((face) => face.oracle_text || 'No oracle text available').join('<br><br>')
+
+  const oracleTextArray = isMDFC
+    ? card.card_faces.map((face) => face.oracle_text || 'No oracle text available')
     : [card.oracle_text || 'No oracle text available'];
 
-  return oracleText
-    .map(
-      (text) =>
-        text
-          .replace(/^\s+|\s+$/g, '') // Remove leading and trailing whitespace
-          .replace(/\s{2,}/g, ' ') // Replace multiple spaces with a single space
-          .replace(/\n/g, '<br>') // Replace newlines with <br> for HTML rendering
-    )
-    .join('<br><br>');
+  console.log('Oracle Text:', oracleTextArray);
+  console.log('Type:', typeof oracleTextArray);
+
+  // Clean each oracle text entry
+  const cleanedOracleText = oracleTextArray.map(
+    (text) =>
+      text
+        .replace(/^\s+|\s+$/g, '') // Remove leading and trailing whitespace
+        .replace(/\s{2,}/g, ' ') // Replace multiple spaces with a single space
+        .replace(/\n/g, '<br>') // Replace newlines with <br> for HTML rendering
+  );
+
+  return cleanedOracleText.join('<br><br>');
 };
 
 // Generate card information
@@ -116,9 +121,14 @@ const generateCardDisplay = (card, cleanedOracleText) => {
                 <div class="card-body">
                     <h5 class="card-title">${cardName}</h5>
                     <p class="card-text">${typeLine}</p>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cardModal${card.id}">
+                    <div class="d-flex justify-content-between gap-2">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cardModal${
+                      card.id
+                    }">
                         View Card
                     </button>
+                    ${addCardButtonLogic(card).outerHTML}
+                    </div>
                 </div>
             </div>
         </div>
@@ -127,28 +137,39 @@ const generateCardDisplay = (card, cleanedOracleText) => {
 
 // Update search results
 const updateSearchResults = (data) => {
-  const resultCount = data.total_cards || 0;
   searchResultsContainer.innerHTML = `
-            <div class="d-flex align-items-center position-relative">
-            <h2 class="ms-2">Search Results</h2>
-            <p class="align-self-center m-0 ms-2 fw-light">
-                <sm>Found ${resultCount} cards</sm>
-            </p>
+      <div class="d-flex align-items-center position-relative">
+        <h2 class="ms-2">Search Results</h2>
+        <p class="align-self-center m-0 ms-2 fw-light">
+            <sm>Found ${data.total_cards} cards</sm>
+        </p>
+      </div>
+      <div class="container text-center">
+        <div class="row">
+          ${data.data
+            .map((card) => {
+              const cleanedOracleText = getCleanedOracleText(card);
+              return (
+                generateCardDisplay(card, cleanedOracleText) +
+                generateCardModal(card, cleanedOracleText)
+              );
+            })
+            .join('')}
         </div>
-        <div class="container text-center">
-            <div class="row">
-                ${data.data
-                  .map((card) => {
-                    const cleanedOracleText = getCleanedOracleText(card);
-                    return (
-                      generateCardDisplay(card, cleanedOracleText) +
-                      generateCardModal(card, cleanedOracleText)
-                    );
-                  })
-                  .join('')}
-            </div>
-        </div>
+      </div>
     `;
+
+  searchResultsContainer.addEventListener('click', (event) => {
+    if (event.target.matches('.btn-success')) {
+      const cardId = event.target.getAttribute('data-card-id');
+      const card = data.data.find((c) => c.id === cardId);
+      if (card) {
+        addCardToDeck(card);
+      } else {
+        console.error(`Card with ID ${cardId} not found`);
+      }
+    }
+  });
 };
 
 // Handle search button click
@@ -170,3 +191,178 @@ generalSearchButton.addEventListener('click', async () => {
 
   generalSearch.value = '';
 });
+
+// Deck Builder
+let deck = {
+  commander: null,
+  mainboard: [],
+  sideboard: [],
+  maybeboard: [],
+  companion: null,
+  name: null,
+};
+
+// Function to render deck
+const renderDeck = () => {
+  const commanderList = document.getElementById('commander-list');
+  const mainboardList = document.getElementById('mainboard-list');
+  const sideboardList = document.getElementById('sideboard-list');
+  const cardNumber = document.getElementById('card-number');
+
+  // Clear previous deck display
+  commanderList.innerHTML = '';
+  mainboardList.innerHTML = '';
+  sideboardList.innerHTML = '';
+
+  // Render commander
+  if (deck.commander) {
+    const commanderCardElement = createCardElement(deck.commander, 'commander');
+    commanderList.appendChild(commanderCardElement);
+  }
+
+  // Render mainboard
+  deck.mainboard.forEach((card) => {
+    const mainboardCardElement = createCardElement(card, 'mainboard');
+    mainboardList.appendChild(mainboardCardElement);
+  });
+
+  // Render sideboard
+  deck.sideboard.forEach((card) => {
+    const sideboardCardElement = createCardElement(card, 'sideboard');
+    sideboardList.appendChild(sideboardCardElement);
+  });
+
+  // Update card count
+  const totalCards = deck.mainboard.length + deck.sideboard.length + (deck.commander ? 1 : 0);
+  cardNumber.textContent = `${totalCards} cards`;
+};
+
+// Function to create card element
+const createCardElement = (card, type) => {
+  const cardName = card.card_faces
+    ? card.card_faces.map((face) => face.name).join(' // ')
+    : card.name;
+  const imageUrl = card.card_faces
+    ? card.card_faces[0].image_uris?.normal
+    : card.image_uris?.normal;
+
+  const cardElement = document.createElement('div');
+  cardElement.className = 'd-flex align-items-center';
+  cardElement.innerHTML = `
+        <button class="list-group-item list-group-item-action flex-grow-1" data-bs-toggle="modal" data-bs-target="#cardModal${card.id}">
+            <div class="">${cardName}</div>
+        </button>
+
+        <button type="button" class="btn btn-outline-danger ms-2 remove-card" data-type="${type}" data-id="${card.id}">
+            <i class="bi bi-trash"></i>
+        </button>
+    `;
+  // Add event listener to remove card
+  cardElement.querySelector('.remove-card').addEventListener('click', (event) => {
+    removeCardFromDeck(type, card.id);
+  });
+
+  return cardElement;
+};
+
+// Function to add card to deck
+const addCardToDeck = (card) => {
+  console.log('addCardToDeck function called');
+  console.log(card);
+
+  if (!deck) {
+    console.error('Deck not initialized');
+    return;
+  }
+
+  const cardType = prompt(
+    'Add this card as:\n1. Commander\n2. Mainboard\n3. Sideboard\n Enter 1, 2 or 3'
+  );
+
+  // Validate input
+  if (cardType === null) {
+    console.log('User cancelled the prompt');
+    return;
+  }
+
+  switch (cardType) {
+    case '1':
+      if (deck.commander) {
+        alert(
+          'You already have a commander. Please remove the current commander before adding a new one.'
+        );
+        console.log('Commander already set.');
+        return;
+      } else {
+        deck.commander = card; // Add as commander
+        console.log('Commander set: ', card.name);
+      }
+      break;
+    case '2':
+      if (!deck.mainboard.find((exsistingCard) => exsistingCard.id === card.id)) {
+        deck.mainboard.push(card); // Add to mainboard
+        console.log('Card added to mainboard: ', card.name);
+      } else {
+        alert('You already have this card in your mainboard. Please add a different card.');
+        console.log('Card already in mainboard.');
+        return;
+      }
+      break;
+    case '3':
+      if (!deck.sideboard.find((exsistingCard) => exsistingCard.id === card.id)) {
+        deck.sideboard.push(card); // Add to sideboard
+        console.log('Card added to sideboard: ', card.name);
+      } else {
+        alert('You already have this card in your sideboard. Please add a different card.');
+        console.log('Card already in sideboard.');
+        return;
+      }
+      break;
+    default:
+      alert('Invalid input. Please enter 1, 2 or 3');
+      console.log('Invalid input');
+      return;
+  }
+  renderDeck();
+};
+
+// Function to remove card from deck
+const removeCardFromDeck = (type, id) => {
+  if (type === 'commander') {
+    deck.commander = null;
+  } else if (type === 'mainboard') {
+    deck.mainboard = deck.mainboard.filter((card) => card.id !== id);
+  } else if (type === 'sideboard') {
+    deck.sideboard = deck.sideboard.filter((card) => card.id !== id);
+  }
+  renderDeck();
+};
+
+// Add event listener to clear deck button
+document.getElementById('clear-button').addEventListener('click', () => {
+  deck = {
+    commander: null,
+    mainboard: [],
+    sideboard: [],
+  };
+  renderDeck();
+});
+
+// Add to deck button to search results
+const addCardButtonLogic = (card) => {
+  console.log('Creating add to deck button for card:', card.name);
+  console.log('addCardToDeck called with: ', card);
+  const addCardButton = document.createElement('button');
+  addCardButton.textContent = 'Add to Deck';
+  addCardButton.className = 'btn btn-success';
+  addCardButton.setAttribute('data-card-id', card.id);
+  addCardButton.setAttribute('data-card-name', card.name);
+  addCardButton.addEventListener('click', () => {
+    console.log(`Adding card to deck: ${card.name}`); // Log card name to console
+    addCardToDeck(card);
+    console.log('Deck:', deck); // Log deck to console
+  });
+  return addCardButton;
+};
+
+//
