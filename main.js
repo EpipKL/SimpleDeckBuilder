@@ -3,11 +3,54 @@ const generalSearch = document.getElementById('general-search');
 const generalSearchButton = document.getElementById('general-search-button');
 const searchResultsContainer = document.getElementById('search-results');
 
+// Initialize a cache object
+const cardCache = {};
+const symbolCache = {};
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Fetch Symbol Data
+const fetchManaSymbols = async () => {
+  if (symbolCache.data) {
+    return symbolCache.data;
+  }
+
+  try {
+    const response = await fetch(`https://api.scryfall.com/symbology`);
+    const data = await response.json();
+
+    // Cache the symbols data
+    symbolCache.data = data.data.reduce((map, symbol) => {
+      map[symbol.symbol] = symbol.svg_uri;
+      return map;
+    }, {});
+    return symbolCache.data;
+  } catch (error) {
+    console.error('Error fetching mana symbols:', error);
+  }
+};
+
 // Fetch Card Data
 const fetchCardData = async (query) => {
+  if (cardCache[query]) {
+    console.log('Spell has been resolved:', query);
+    return cardCache[query];
+  }
+
+  await delay(1000); // Simulate network latency
+
   try {
     const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}`);
-    return await response.json();
+
+    if (!response.ok) {
+      throw new Error('Counter Spell: Error fetching data');
+    }
+
+    const data = await response.json();
+
+    // Store data in cache
+    cardCache[query] = data;
+    return data;
   } catch (error) {
     console.error('Counter Spell: Error fetching data:', error);
     throw new Error('Counter Spell: Error fetching data');
@@ -22,16 +65,25 @@ const getCleanedOracleText = (card) => {
     ? card.card_faces.map((face) => face.oracle_text || 'No oracle text available')
     : [card.oracle_text || 'No oracle text available'];
 
-  console.log('Oracle Text:', oracleTextArray);
-  console.log('Type:', typeof oracleTextArray);
+  // Get symbol data
+  const symbols = fetchManaSymbols();
+
+  // console.log('Oracle Text:', oracleTextArray);
+  // console.log('Type:', typeof oracleTextArray);
 
   // Clean each oracle text entry
-  const cleanedOracleText = oracleTextArray.map(
-    (text) =>
-      text
-        .replace(/^\s+|\s+$/g, '') // Remove leading and trailing whitespace
-        .replace(/\s{2,}/g, ' ') // Replace multiple spaces with a single space
-        .replace(/\n/g, '<br>') // Replace newlines with <br> for HTML rendering
+  const cleanedOracleText = oracleTextArray.map((text) =>
+    text
+      .replace(/^\s+|\s+$/g, '') // Remove leading/trailing whitespace
+      .replace(/\s{2,}/g, ' ') // Replace multiple spaces with a single space
+      .replace(/\n/g, '<br>') // Replace newlines with <br> for HTML rendering
+      .replace(/\{([A-Z0-9]+)\}/g, (match) => {
+        const symbol = `{${match.slice(1, -1)}}`; // e.g., "{U}"
+        const symbolUrl = symbols[symbol];
+        return symbolUrl
+          ? `<img src="${symbolUrl}" alt="${symbol}" style="width: 1em; height: 1em;">`
+          : match; // If no symbol found, return original match
+      })
   );
 
   return cleanedOracleText.join('<br><br>');
@@ -71,12 +123,17 @@ const generateCardInfo = (card) => {
     ? `<p class="fs-3 fw-bold m-0 mb-2 px-2 py-1 bg-black bg-opacity-50 rounded-1">${card.power} / ${card.toughness}</p>`
     : '';
 
-  return { cardName, typeLine, imageUrl, modalImageUrl, powerToughness };
+  const cardCost = isMDFC
+    ? card.card_faces.map((face) => face.mana_cost).join(' // ')
+    : card.mana_cost;
+
+  return { cardName, typeLine, imageUrl, modalImageUrl, powerToughness, cardCost };
 };
 
 // Generate card modal HTML
 const generateCardModal = (card, cleanedOracleText) => {
-  const { cardName, typeLine, imageUrl, modalImageUrl, powerToughness } = generateCardInfo(card);
+  const { cardName, typeLine, imageUrl, modalImageUrl, powerToughness, cardCost } =
+    generateCardInfo(card);
   const modalId = `cardModal${card.id}`;
 
   return `
@@ -84,7 +141,7 @@ const generateCardModal = (card, cleanedOracleText) => {
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content border border-info">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="${modalId}Label">Card Details</h5>
+                        <h5 class="modal-title" id="${modalId}Label">${cardName} <span class="lead"><small>${cardCost}</small></span></h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body mb-2">
@@ -96,7 +153,6 @@ const generateCardModal = (card, cleanedOracleText) => {
                             </div>
                         </div>
                         <div class="border border-info my-2 p-1 rounded-2">
-                            <h5 class="card-title">${cardName}</h5>
                             <p>${typeLine}</p>
                             <p class="card-text">${cleanedOracleText}</p>
                         </div>
@@ -174,20 +230,69 @@ const updateSearchResults = (data) => {
 };
 
 // Handle search button click
-generalSearchButton.addEventListener('click', async () => {
+generalSearchButton.addEventListener('click', async (event) => {
+  event.preventDefault();
+
+  const showAlert = (message, type) => {
+    const alertSearchPlaceholder = document.querySelector('#alert-search-placeholder');
+    alertSearchPlaceholder.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show mt-2 mx-5" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+  };
+
   const query = generalSearch.value.trim();
 
   if (!query) {
-    searchResultsContainer.innerHTML =
-      '<p class="ms-2 ms-md-5 text-danger">Please enter a search query</p>';
+    showAlert('Please enter a search query', 'warning');
     return;
   }
 
   try {
-    const data = await fetchCardData(query);
+    let data;
+
+    // Dynamically add the loader to the search results container.
+    const loader = document.createElement('div');
+    loader.id = 'loader';
+    loader.classList.add('text-center', 'my-3');
+    loader.innerHTML = `
+      <div class="spinner-border text-info" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    `;
+    searchResultsContainer.appendChild(loader);
+
+    // Force a repaint to ensure loader visibility
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Clear other content in #search-results, except the loader
+    [...searchResultsContainer.children].forEach((child) => {
+      if (child.id !== 'loader') {
+        child.remove();
+      }
+    });
+
+    // Check if the data is already cached
+    if (cardCache[query]) {
+      console.log('Using cached data for:', query);
+      data = cardCache[query];
+    } else {
+      // Fetch data from the network if not cached
+      console.log('Fetching new data for:', query);
+      data = await fetchCardData(query);
+      // Cache the data for future use
+      cardCache[query] = data;
+    }
+
+    // Update the search results with the retrieved data
     updateSearchResults(data);
   } catch (error) {
-    searchResultsContainer.innerHTML = `<p class="ms-2 ms-md-5 text-danger">Counter Spell: ${error.message}.</p>`;
+    showAlert('Counter Spell: ' + error.message, 'danger');
+  } finally {
+    // // Hide the loader after updating results or if an error occurs
+    loader.remove();
   }
 
   generalSearch.value = '';
@@ -195,7 +300,7 @@ generalSearchButton.addEventListener('click', async () => {
 
 // Deck Builder
 let deck = {
-  commander: null,
+  commander: [],
   mainboard: [],
   sideboard: [],
   maybeboard: [],
@@ -205,8 +310,11 @@ let deck = {
 
 // Function to render deck
 const renderDeck = () => {
+  const commanderText = document.getElementById('commander-text');
   const commanderList = document.getElementById('commander-list');
+  const mainboardText = document.getElementById('mainboard-text');
   const mainboardList = document.getElementById('mainboard-list');
+  const sideboardText = document.getElementById('sideboard-text');
   const sideboardList = document.getElementById('sideboard-list');
   const cardNumber = document.getElementById('card-number');
 
@@ -215,10 +323,14 @@ const renderDeck = () => {
   mainboardList.innerHTML = '';
   sideboardList.innerHTML = '';
 
-  // Render commander
-  if (deck.commander) {
-    const commanderCardElement = createCardElement(deck.commander, 'commander', 1);
-    commanderList.appendChild(commanderCardElement);
+  // Render commander(s)
+  if (deck.commander && deck.commander.length > 0) {
+    commanderText.classList.remove('d-none');
+    mainboardText.classList.add('mt-3');
+    deck.commander.forEach((commanderCard) => {
+      const commanderCardElement = createCardElement(commanderCard, 'commander', 1);
+      commanderList.appendChild(commanderCardElement);
+    });
   }
 
   // Render mainboard
@@ -229,6 +341,8 @@ const renderDeck = () => {
 
   // Render sideboard
   deck.sideboard.forEach((card) => {
+    sideboardText.classList.remove('d-none');
+    mainboardText.classList.add('mb-3');
     const sideboardCardElement = createCardElement(card, 'sideboard', card.quantity);
     sideboardList.appendChild(sideboardCardElement);
   });
@@ -237,8 +351,9 @@ const renderDeck = () => {
   const totalCards =
     deck.mainboard.reduce((acc, card) => acc + card.quantity, 0) +
     deck.sideboard.reduce((acc, card) => acc + card.quantity, 0) +
-    (deck.commander ? 1 : 0); // Commander count is always 1
-  cardNumber.textContent = `${totalCards} cards`;
+    deck.commander.length;
+
+  cardNumber.textContent = totalCards === 1 ? `${totalCards} card` : `${totalCards} cards`;
 };
 
 // Function to create card element
@@ -333,14 +448,14 @@ const createAddCardModal = (card) => {
 
   // Event listeners for buttons
   modal.querySelector('#addCommanderBtn').onclick = () => {
-    if (deck.commander) {
+    if (deck.commander && deck.commander.length >= 2) {
       showAlert(
-        'You already have a commander. Please remove the existing commander before adding a new one.',
+        'You already have two commanders. Please remove an existing commander before adding a new one.',
         'warning'
       );
-      console.log('Commander already set.');
+      console.log('Two commanders already set.');
     } else {
-      deck.commander = card; // Add as commander
+      deck.commander.push(card); // Add as commander
       console.log('Commander set: ', card.name);
       addCardModal.hide(); // Close modal
       renderDeck();
@@ -407,7 +522,7 @@ const addCardToDeck = (card) => {
 // Function to remove card from deck
 const removeCardFromDeck = (type, id) => {
   if (type === 'commander') {
-    deck.commander = null;
+    deck.commander = deck.commander.filter((card) => card.id !== id);
   } else if (type === 'mainboard') {
     deck.mainboard = deck.mainboard.filter((card) => card.id !== id);
   } else if (type === 'sideboard') {
@@ -419,7 +534,7 @@ const removeCardFromDeck = (type, id) => {
 // Add event listener to clear deck button
 document.getElementById('clear-button').addEventListener('click', () => {
   deck = {
-    commander: null,
+    commander: [],
     mainboard: [],
     sideboard: [],
   };
