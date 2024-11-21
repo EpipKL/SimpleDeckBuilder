@@ -130,13 +130,23 @@ const generateCardInfo = (card) => {
   return { cardName, typeLine, imageUrl, modalImageUrl, powerToughness, cardCost };
 };
 
+// Cache for modals
+const modalCache = {};
+
 // Generate card modal HTML
-const generateCardModal = (card, cleanedOracleText) => {
+const getCardModal = (card, cleanedOracleText) => {
   const { cardName, typeLine, imageUrl, modalImageUrl, powerToughness, cardCost } =
     generateCardInfo(card);
   const modalId = `cardModal${card.id}`;
 
-  return `
+  // If the modal is in the cache then return it
+  if (modalCache[card.id]) {
+    return modalCache[card.id];
+  }
+
+  // If not then generate the modal
+
+  const modalHTML = `
         <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content border border-info">
@@ -154,7 +164,7 @@ const generateCardModal = (card, cleanedOracleText) => {
                         </div>
                         <div class="border border-info my-2 p-1 rounded-2">
                             <p>${typeLine}</p>
-                            <p class="card-text">${cleanedOracleText}</p>
+                            <p class="card-text text-start">${cleanedOracleText}</p>
                         </div>
                         <div class="border border-info my-2 p-1 rounded-2 d-flex justify-content-between px-2">
                             <p class="card-text m-0"><span class="fw-bold">Set</span>: <span class="text-decoration-underline">${card.set_name}</span></p>
@@ -165,11 +175,25 @@ const generateCardModal = (card, cleanedOracleText) => {
             </div>
         </div>
     `;
+
+  //  Cache the modal
+  modalCache[card.id] = modalHTML;
+
+  return modalHTML;
 };
 
 // Generate card HTML
 const generateCardDisplay = (card, cleanedOracleText) => {
   const { cardName, typeLine, imageUrl } = generateCardInfo(card);
+
+  // Generate or retrive cached modal
+  const modalHTML = getCardModal(card, cleanedOracleText);
+
+  // Append to modal container but only once
+  const modalContainer = document.getElementById('modal-container');
+  if (!document.getElementById(`cardModal${card.id}`)) {
+    modalContainer.insertAdjacentHTML('beforeend', modalHTML);
+  }
 
   return `
      <div class="col-12 col-md-4 col-lg-3">
@@ -207,8 +231,7 @@ const updateSearchResults = (data) => {
             .map((card) => {
               const cleanedOracleText = getCleanedOracleText(card);
               return (
-                generateCardDisplay(card, cleanedOracleText) +
-                generateCardModal(card, cleanedOracleText)
+                generateCardDisplay(card, cleanedOracleText) + getCardModal(card, cleanedOracleText)
               );
             })
             .join('')}
@@ -235,6 +258,13 @@ generalSearchButton.addEventListener('click', async (event) => {
 
   const showAlert = (message, type) => {
     const alertSearchPlaceholder = document.querySelector('#alert-search-placeholder');
+
+    // Check if the element exsists in the DOM
+    if (!alertSearchPlaceholder) {
+      console.error('Alert placeholder not found');
+      return;
+    }
+
     alertSearchPlaceholder.innerHTML = `
             <div class="alert alert-${type} alert-dismissible fade show mt-2 mx-5" role="alert">
                 ${message}
@@ -269,7 +299,7 @@ generalSearchButton.addEventListener('click', async (event) => {
 
     // Clear other content in #search-results, except the loader
     [...searchResultsContainer.children].forEach((child) => {
-      if (child.id !== 'loader') {
+      if (child.id !== 'loader' && child.id !== 'alert-search-placeholder') {
         child.remove();
       }
     });
